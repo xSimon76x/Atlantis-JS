@@ -15,7 +15,14 @@ GamePlayManager = {
     game.scale.pageAlignHorizontally = true;
     game.scale.pageAlignVertically = true;
 
+    //validacion para comenzar juego cuando se clickea la pantalla
     this.flagFirstMouseDown = false;
+
+    //var para guardar los diamantes que agarramos
+    this.amountDiamondsCaught = 0;
+
+    //estado para saber cuando el juego termino
+    this.endGame = false;
   },
   // cargar los recursos para el proyecto
   preload: function () {
@@ -76,37 +83,83 @@ GamePlayManager = {
     // tween.to({ x: 500, y: 100 }, 1500, Phaser.Easing.Exponential.Out);
     // tween.start();
 
-    //integrar y ver png de explosion cargada
-    this.explosion = game.add.sprite(100, 100, "explosion");
-    this.explosion.tweenScale = game.add.tween(this.explosion.scale).to(
-      {
-        x: [0.4, 0.8, 0.4],
-        y: [0.4, 0.8, 0.4],
+    //integrar y ver png de explosion cargada (forma1)
+    // this.explosion = game.add.sprite(100, 100, "explosion");
+
+    //crear grupos, para luego a ese grupo agregarle animaciones u otras cosas.add() (forma2, la mejor)
+    this.explosionGroup = game.add.group();
+
+    for (let index = 0; index < 10; index++) {
+      this.explosion = this.explosionGroup.create(100, 100, "explosion");
+
+      this.explosion.tweenScale = game.add.tween(this.explosion.scale).to(
+        {
+          x: [0.4, 0.8, 0.4],
+          y: [0.4, 0.8, 0.4],
+        },
+        600,
+        Phaser.Easing.Exponential.Out,
+        false,
+        0,
+        0,
+        false
+      );
+      this.explosion.tweenAlpha = game.add.tween(this.explosion).to(
+        {
+          alpha: [1, 0.6, 0],
+        },
+        600,
+        Phaser.Easing.Exponential.Out,
+        false,
+        0,
+        0,
+        false
+      );
+      this.explosion.anchor.setTo(0.5);
+      this.explosion.kill();
+    }
+
+    // crear estilos para textos
+    let style = {
+      font: "bold 30pt Arial",
+      fill: "#FFFFFF",
+      align: "center",
+    };
+
+    //Crear textos
+    this.scoreText = game.add.text(game.width / 2, 40, "0", style);
+
+    //puntaje actual
+    this.currentScore = 0;
+
+    //centrar texto
+    this.scoreText.anchor.setTo(0.5);
+
+    //////////////Timer
+    this.totalTime = 5;
+    this.timerText = game.add.text(1050, 40, this.totalTime + "", style);
+    this.timerText.anchor.setTo(0.5);
+
+    this.timerGameOver = game.time.events.loop(
+      Phaser.Timer.SECOND,
+      function () {
+        if (this.flagFirstMouseDown) {
+          this.totalTime--;
+          this.timerText.text = this.totalTime + "";
+          if (this.totalTime <= 0) {
+            game.time.events.remove(this.timerGameOver);
+            this.endGame = true;
+            this.showFinalMessage("Juego Terminado");
+          }
+        }
+        console.log("afuer");
       },
-      600,
-      Phaser.Easing.Exponential.Out,
-      false,
-      0,
-      0,
-      false
+      this
     );
-    this.explosion.tweenAlpha = game.add.tween(this.explosion).to(
-      {
-        alpha: [1, 0.6, 0],
-      },
-      600,
-      Phaser.Easing.Exponential.Out,
-      false,
-      0,
-      0,
-      false
-    );
-    this.explosion.anchor.setTo(0.5);
-    this.explosion.visible = false;
   },
   //phaser frame a frame ejecutara este metodo
   update: function () {
-    if (this.flagFirstMouseDown) {
+    if (this.flagFirstMouseDown && !this.endGame) {
       // console.log("update");
       // this.horse.angle+=1; rotar automaticamente el caballo
       let pointerX = game.input.x;
@@ -135,14 +188,29 @@ GamePlayManager = {
           this.diamonds[index].visible &&
           this.isRectanglesOverlapping(rectHorse, rectDiamond)
         ) {
+          //funcion para incrementar puntaje al colisionar
+          this.increaseScore();
           //los diamantes desaparecen cuando se COLISIONAN
           this.diamonds[index].visible = false;
 
-          this.explosion.visible = true;
-          this.explosion.x = this.diamonds[index].x;
-          this.explosion.y = this.diamonds[index].y;
-          this.explosion.tweenScale.start();
-          this.explosion.tweenAlpha.start();
+          let explosion = this.explosionGroup.getFirstDead();
+          if (explosion != null) {
+            this.explosion.reset(
+              this.diamonds[index].x,
+              this.diamonds[index].y
+            );
+
+            this.explosion.tweenScale.start();
+            this.explosion.tweenAlpha.start();
+
+            explosion.tweenAlpha.onComplete.add(function (
+              currentTarget,
+              currentTween
+            ) {
+              currentTarget.kill();
+            },
+            this);
+          }
         }
       }
     }
@@ -195,6 +263,42 @@ GamePlayManager = {
     // for (let index = 0; index < Cant_Diamantes; index++) {
     //   game.debug.spriteBounds(this.diamonds[index]);
     // }
+  },
+  //metodo para incrementar el puntaje al haber una colision con un diamante
+  increaseScore: function () {
+    this.currentScore += 100;
+    this.scoreText.text = this.currentScore;
+
+    this.amountDiamondsCaught += 1;
+    if (this.amountDiamondsCaught >= Cant_Diamantes) {
+      //al ganar el juego se ejecuta tal codigo
+      game.time.events.remove(this.timerGameOver);
+      this.endGame = true;
+      this.showFinalMessage("Felicidades");
+    }
+  },
+  //mensaje final al ganar o perder en el juego
+  showFinalMessage: function (msg) {
+    let bgAlpha = game.add.bitmapData(game.width, game.height);
+    bgAlpha.ctx.fillStyle = "#000000";
+    bgAlpha.ctx.fillRect(0, 0, game.width, game.height);
+    let bg = game.add.sprite(0, 0, bgAlpha);
+    bg.alpha = 0.5;
+
+    // crear estilos para textos
+    let style = {
+      font: "bold 60pt Arial",
+      fill: "#FFFFFF",
+      align: "center",
+    };
+
+    this.textFieldFinalMsg = game.add.text(
+      game.width / 2,
+      game.height / 2,
+      msg,
+      style
+    );
+    this.textFieldFinalMsg.anchor.setTo(0.5);
   },
 };
 
