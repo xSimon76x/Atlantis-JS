@@ -3,6 +3,7 @@
 //variables
 
 let Cant_Diamantes = 30;
+let Cant_burbujas = 30;
 
 //cuando se es llamado este metodo comienza la ejecucion de lo siguiente...
 GamePlayManager = {
@@ -23,6 +24,13 @@ GamePlayManager = {
 
     //estado para saber cuando el juego termino
     this.endGame = false;
+
+    //cambio de frame del caballo con ojos cerrados y ojos abiertos
+    this.cuentaSonrisa = -1;
+
+    //variables de musica
+    let musica;
+    let s;
   },
   // cargar los recursos para el proyecto
   preload: function () {
@@ -31,12 +39,52 @@ GamePlayManager = {
     game.load.spritesheet("horse", "/assets/image/horse.png", 84, 156, 2);
     game.load.spritesheet("diamonds", "/assets/image/diamonds.png", 81, 84, 4);
     game.load.spritesheet("explosion", "/assets/image/explosion.png");
+    game.load.spritesheet("tiburon", "/assets/image/shark.png");
+    game.load.spritesheet("peces", "/assets/image/fishes.png");
+    game.load.spritesheet("medusa", "/assets/image/mollusk.png");
+    game.load.spritesheet("burbuja1", "/assets/image/booble1.png");
+    game.load.spritesheet("burbuja2", "/assets/image/booble2.png");
+    game.load.audio("musicaBack", ["/assets/sounds/musicLoop.mp3"]);
   },
   // crea los recursos ya cargados para ser utilizados
   create: function () {
     console.log("create");
     //añadir sprite o recursos
     game.add.sprite(0, 0, "background");
+
+    //agregar musica, definir su volumen en decimal y definir reproducir
+    musica = game.add.audio("musicaBack");
+    musica.volume = 0.5;
+    musica.loop = true;
+    musica.play();
+
+    //agregar burbujas
+    this.burbujasArray = [];
+    ////guardar en un array, las brubujas con sus posiciones, velocidades y opacidades descritas
+    for (let index = 0; index < Cant_burbujas; index++) {
+      let xBurbuja = game.rnd.integerInRange(1, 1140);
+      let yBurbuja = game.rnd.integerInRange(600, 950);
+
+      let burbuja = game.add.sprite(
+        xBurbuja,
+        yBurbuja,
+        "burbuja" + game.rnd.integerInRange(1, 2)
+      );
+      burbuja.vel = 0.2 + game.rnd.frac() * 2;
+      burbuja.alpha = 0.9;
+      burbuja.scale.setTo(0.2 + game.rnd.frac());
+      this.burbujasArray[index] = burbuja;
+    }
+
+    //Tiburon, en esta posicion para que este debajo de los diamantes y el caballo
+    this.tiburon = game.add.sprite(500, 20, "tiburon");
+
+    //Medusa
+    this.medusa = game.add.sprite(950, 60, "medusa");
+
+    //Peces
+    this.peces = game.add.sprite(200, 300, "peces");
+
     //horse
     this.horse = game.add.sprite(0, 0, "horse");
     this.horse.frame = 0;
@@ -135,8 +183,8 @@ GamePlayManager = {
     //centrar texto
     this.scoreText.anchor.setTo(0.5);
 
-    //////////////Timer
-    this.totalTime = 5;
+    //////////////Timer - Tiempo del Juego
+    this.totalTime = 30;
     this.timerText = game.add.text(1050, 40, this.totalTime + "", style);
     this.timerText.anchor.setTo(0.5);
 
@@ -160,7 +208,28 @@ GamePlayManager = {
   //phaser frame a frame ejecutara este metodo
   update: function () {
     if (this.flagFirstMouseDown && !this.endGame) {
-      // console.log("update");
+      for (let index = 0; index < Cant_burbujas; index++) {
+        let burbuja = this.burbujasArray[index];
+        burbuja.y -= burbuja.vel;
+        if (burbuja.y < -50) {
+          //se resetea la posicion de cada burbuja con estas corrdenadas en x e y
+          burbuja.y = 700;
+          burbuja.x = game.rnd.integerInRange(1, 1140);
+        }
+      }
+
+      //movimiento del tiburon
+      this.tiburon.x--;
+      if (this.tiburon.x < -300) {
+        this.tiburon.x = 1300;
+      }
+
+      //movimiento de los peces
+      this.peces.x += 0.3;
+      if (this.peces.x > 1200) {
+        this.peces.x = -300;
+      }
+
       // this.horse.angle+=1; rotar automaticamente el caballo
       let pointerX = game.input.x;
       let pointerY = game.input.y;
@@ -213,10 +282,26 @@ GamePlayManager = {
           }
         }
       }
+
+      //cambiar estado
+      if (this.cuentaSonrisa >= 0) {
+        this.cuentaSonrisa++;
+        if (this.cuentaSonrisa > 50) {
+          this.cuentaSonrisa = -1;
+          this.horse.frame = 0;
+        }
+      }
     }
   },
   // metodos usados en el create
   onTap: function () {
+    if (!this.flagFirstMouseDown) {
+      this.tweenMedusa = game.add
+        .tween(this.medusa.position)
+        .to({ y: -0.001 }, 5800, Phaser.Easing.Cubic.InOut, true, 0, 1000, true)
+        .loop(true);
+    }
+
     this.flagFirstMouseDown = true;
   },
   // calcular y asociar un bodyblock a los diamantes
@@ -263,9 +348,16 @@ GamePlayManager = {
     // for (let index = 0; index < Cant_Diamantes; index++) {
     //   game.debug.spriteBounds(this.diamonds[index]);
     // }
+    //mostrar informacion de la musica cargada
+    // game.debug.soundInfo(musica, 20, 32);
   },
   //metodo para incrementar el puntaje al haber una colision con un diamante
   increaseScore: function () {
+    //cambiar contador de sonrisa del cabballo al tomar un diamante
+    this.cuentaSonrisa = 0;
+    this.horse.frame = 1;
+
+    //sumar 100 puntos al tomar un diamante
     this.currentScore += 100;
     this.scoreText.text = this.currentScore;
 
@@ -279,6 +371,9 @@ GamePlayManager = {
   },
   //mensaje final al ganar o perder en el juego
   showFinalMessage: function (msg) {
+    //detener movimiento de medusa
+    this.tweenMedusa.stop();
+    //creacion de cuadro de finalizacion del juego
     let bgAlpha = game.add.bitmapData(game.width, game.height);
     bgAlpha.ctx.fillStyle = "#000000";
     bgAlpha.ctx.fillRect(0, 0, game.width, game.height);
